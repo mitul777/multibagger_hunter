@@ -17,20 +17,31 @@ from finbert_analyzer import analyze_document_with_finbert
 
 console = Console()
 
+import argparse
+
 def enrich_candidates():
-    path = "output/multibagger_candidates.xlsx"
+    parser = argparse.ArgumentParser(description="Run FinBERT AI on an Excel list of candidates.")
+    parser.add_argument("--input", default="output/multibagger_candidates.xlsx", help="Path to input Excel file.")
+    parser.add_argument("--limit", type=int, default=None, help="Max number of companies to analyze (e.g. 50)")
+    args = parser.parse_args()
+    
+    path = args.input
     if not os.path.exists(path):
-        console.print("[yellow]No candidates file found. Please run multibagger_hunter.py first.[/yellow]")
+        console.print(f"[yellow]No candidates file found at {path}[/yellow]")
         return
 
     df = pd.read_excel(path)
     if df.empty:
         console.print("[yellow]The candidates file is empty. Nothing to enrich.[/yellow]")
         return
+        
+    if args.limit and len(df) > args.limit:
+        console.print(f"[cyan]Limiting AI analysis to the top {args.limit} candidates...[/cyan]")
+        df = df.head(args.limit).copy()
 
     console.print(Panel.fit(
         f"[bold green]🤖 AI Enrichment Pipeline[/bold green]\n"
-        f"[dim]Running FinBERT deep dive on {len(df)} surviving multibagger candidates...[/dim]"
+        f"[dim]Running FinBERT deep dive on {len(df)} candidates...[/dim]"
     ))
 
     sentiments = []
@@ -69,8 +80,10 @@ def enrich_candidates():
     # Sort the final file so the absolute best stocks are at the top
     # Priority 1: PEG Ratio (Cheapest growth first)
     # Priority 2: AI Sentiment
-    # Note: PEG might have NaNs if growth was negative, so we put NaNs last
-    df = df.sort_values(by=['PEG_Ratio', 'AI_Net_Sentiment_%'], ascending=[True, False], na_position='last')
+    if 'Composite_Factor_Score' in df.columns:
+        df = df.sort_values(by=['Composite_Factor_Score', 'AI_Net_Sentiment_%'], ascending=[False, False])
+    else:
+        df = df.sort_values(by=['PEG_Ratio', 'AI_Net_Sentiment_%'], ascending=[True, False], na_position='last')
     
     # Save it back
     df.to_excel(path, index=False)

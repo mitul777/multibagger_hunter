@@ -28,6 +28,9 @@ jobs:
       - name: Run Factor Model (8-Dimension Z-Scoring)
         run: python hunter_factor_model.py
 
+      - name: Run FinBERT AI Deep Dive on Top 50
+        run: python ai_enricher.py --input output/factor_model_candidates.xlsx --limit 50
+
       - name: Upload Factor Candidates as Artifact
         uses: actions/upload-artifact@v4
         with:
