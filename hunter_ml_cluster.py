@@ -61,7 +61,11 @@ def run_ml_clustering():
                 "trajectory_score": t_score,
                 "PEG_Ratio": peg,
                 "roce_avg": scored.get("roce_avg", np.nan),
-                "promoter_holding": qual_data.get("sh_promoter_holding_pct", 0.0)
+                "promoter_holding": qual_data.get("sh_promoter_holding_pct", 0.0),
+                "earnings_quality": metrics.get("earnings_quality", np.nan),
+                "debt_to_equity": metrics.get("debt_to_equity", np.nan),
+                "ev_to_ebitda": metrics.get("ev_to_ebitda", np.nan),
+                "price_momentum": metrics.get("price_momentum", np.nan)
             }
             raw_data.append(row)
         except Exception:
@@ -72,9 +76,15 @@ def run_ml_clustering():
     
     # 1. Clean Data for ML Model
     df = df.dropna(subset=['trajectory_score', 'PEG_Ratio', 'roce_avg'])
-    df = df.replace([np.inf, -np.inf], np.nan).dropna()
+    df = df.replace([np.inf, -np.inf], np.nan)
     
-    features = ['trajectory_score', 'PEG_Ratio', 'roce_avg', 'promoter_holding']
+    # Fill remaining NaNs with median so KMeans doesn't crash
+    df = df.fillna(df.median(numeric_only=True))
+    
+    features = [
+        'trajectory_score', 'PEG_Ratio', 'roce_avg', 'promoter_holding',
+        'earnings_quality', 'debt_to_equity', 'ev_to_ebitda', 'price_momentum'
+    ]
     X = df[features].copy()
     
     # 2. Scale Features

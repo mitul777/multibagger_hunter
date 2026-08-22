@@ -105,6 +105,27 @@ class MetricsCalculator:
         # -- Liquidity --
         metrics.update(self._liquidity(curr_assets, curr_liab, cash, combined_debt))
 
+        # -- Quality & Momentum (Institutional Factors) --
+        # 1. Earnings Quality (CFO / Net Income)
+        operating_cf = F.get_row(cf, "Operating Cash Flow", "Total Cash From Operating Activities", "Cash Flow From Continuing Operating Activities")
+        if operating_cf is not None and not operating_cf.empty and net_income is not None and not net_income.empty:
+            latest_cfo = float(operating_cf.iloc[0]) if len(operating_cf) > 0 else np.nan
+            latest_ni = float(net_income.iloc[0]) if len(net_income) > 0 else np.nan
+            metrics["earnings_quality"] = F.safe_div(latest_cfo, latest_ni)
+        else:
+            metrics["earnings_quality"] = np.nan
+            
+        # 2. Leverage
+        metrics["debt_to_equity"] = info.get("debtToEquity", np.nan)
+        
+        # 3. Capital Structure Neutral Valuation
+        metrics["ev_to_ebitda"] = info.get("enterpriseToEbitda", np.nan)
+        
+        # 4. Momentum (Distance to 52w High)
+        current_price = info.get("currentPrice", np.nan)
+        high_52w = info.get("fiftyTwoWeekHigh", np.nan)
+        metrics["price_momentum"] = F.safe_div(current_price, high_52w)
+
         return metrics
 
     # -------------------------------------------------------------------------

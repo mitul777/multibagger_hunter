@@ -76,7 +76,11 @@ def run_factor_model():
                 "total_institutional": total_inst,
                 "promoter_holding": promoter if not pd.isna(promoter) else 0.0,
                 "pledge": pledge if not pd.isna(pledge) else 0.0,
-                "roce_avg": scored.get("roce_avg", np.nan)
+                "roce_avg": scored.get("roce_avg", np.nan),
+                "earnings_quality": metrics.get("earnings_quality", np.nan),
+                "debt_to_equity": metrics.get("debt_to_equity", np.nan),
+                "ev_to_ebitda": metrics.get("ev_to_ebitda", np.nan),
+                "price_momentum": metrics.get("price_momentum", np.nan)
             }
             raw_data.append(row)
         except Exception:
@@ -89,6 +93,14 @@ def run_factor_model():
     df = df.dropna(subset=['trajectory_score', 'PE_Ratio'])
     df['PEG_Ratio'] = df['PEG_Ratio'].fillna(df['PEG_Ratio'].median())
     df['roce_avg'] = df['roce_avg'].fillna(df['roce_avg'].median())
+    df['earnings_quality'] = df['earnings_quality'].fillna(df['earnings_quality'].median())
+    df['debt_to_equity'] = df['debt_to_equity'].fillna(df['debt_to_equity'].median())
+    df['ev_to_ebitda'] = df['ev_to_ebitda'].fillna(df['ev_to_ebitda'].median())
+    df['price_momentum'] = df['price_momentum'].fillna(df['price_momentum'].median())
+    
+    # Replace any extreme inf values generated during math
+    df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=['trajectory_score'])
+    df = df.fillna(df.median(numeric_only=True))
     
     # 2. Compute Z-Scores (StandardScaler calculates (X - Mean) / StdDev)
     scaler = StandardScaler()
@@ -97,17 +109,25 @@ def run_factor_model():
     df['Z_Trajectory'] = scaler.fit_transform(df[['trajectory_score']])
     df['Z_Promoter']   = scaler.fit_transform(df[['promoter_holding']])
     df['Z_ROCE']       = scaler.fit_transform(df[['roce_avg']])
+    df['Z_EarnQual']   = scaler.fit_transform(df[['earnings_quality']])
+    df['Z_Momentum']   = scaler.fit_transform(df[['price_momentum']])
     
     # Negative Factors (Lower is Better, so we invert them by multiplying by -1)
     df['Z_Valuation']  = scaler.fit_transform(df[['PEG_Ratio']]) * -1
+    df['Z_EV_EBITDA']  = scaler.fit_transform(df[['ev_to_ebitda']]) * -1
     df['Z_Pledge']     = scaler.fit_transform(df[['pledge']]) * -1
     df['Z_InstHold']   = scaler.fit_transform(df[['total_institutional']]) * -1
+    df['Z_Debt']       = scaler.fit_transform(df[['debt_to_equity']]) * -1
     
     # 3. Calculate Final Composite Score
-    # We give 3x weight to Trajectory, 3x to Valuation, 1x to everything else
+    # We give 3x weight to Trajectory, 3x to Valuation, and weigh everything else
     df['Composite_Factor_Score'] = (
         (df['Z_Trajectory'] * 3) + 
-        (df['Z_Valuation'] * 3) + 
+        (df['Z_Valuation'] * 2) + 
+        (df['Z_EV_EBITDA'] * 1) + 
+        (df['Z_EarnQual'] * 2) + 
+        (df['Z_Momentum'] * 2) + 
+        (df['Z_Debt'] * 1) + 
         df['Z_Promoter'] + 
         df['Z_ROCE'] + 
         df['Z_Pledge'] + 
