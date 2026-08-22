@@ -1,0 +1,36 @@
+name: ML Clustering Scan (K-Means)
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+  schedule:
+    - cron: '0 6 * * 6' # Runs at 6:00 AM UTC on Saturdays
+
+jobs:
+  run-ml-clustering:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120 
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run ML Clustering (Anomaly Detection)
+        run: python hunter_ml_cluster.py
+
+      - name: Upload ML Cluster Candidates as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ml-cluster-candidates
+          path: output/ml_cluster_candidates.xlsx
+          retention-days: 7

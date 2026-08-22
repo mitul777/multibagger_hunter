@@ -1,0 +1,36 @@
+name: Factor Model Scan (Z-Scores)
+
+on:
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+  schedule:
+    - cron: '0 4 * * 6' # Runs at 4:00 AM UTC on Saturdays (after the main scan)
+
+jobs:
+  run-factor-model:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120 
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Factor Model (8-Dimension Z-Scoring)
+        run: python hunter_factor_model.py
+
+      - name: Upload Factor Candidates as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: factor-model-candidates
+          path: output/factor_model_candidates.xlsx
+          retention-days: 7
