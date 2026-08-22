@@ -12,6 +12,9 @@ import pandas as pd
 from rich.console import Console
 from rich.panel import Panel
 
+import requests_cache
+requests_cache.install_cache('market_data_cache', expire_after=86400)
+
 # We import the FinBERT analyzer logic directly
 from finbert_analyzer import analyze_document_with_finbert
 
