@@ -36,6 +36,8 @@ console = Console()
 MAX_MCAP_CR = 7500         # Must be a small/micro cap
 MIN_TRAJECTORY_SCORE = 25  # Must have improving fundamentals
 MAX_INSTITUTIONAL = 15.0   # Must be largely undiscovered by institutions
+MIN_PROMOTER_HOLDING = 40.0 # Founders must have at least 40% skin in the game
+MAX_PROMOTER_PLEDGE = 0.0   # Strictly 0% pledged shares allowed
 
 def fetch_nse_master_list() -> list:
     """Downloads the master list of all equities directly from NSE."""
@@ -134,6 +136,18 @@ def hunt_multibaggers():
             total_inst = fii + dii
             
             if total_inst > MAX_INSTITUTIONAL:
+                continue
+                
+            promoter = qual_data.get("sh_promoter_holding_pct", 0.0)
+            pledge = qual_data.get("sh_pledge_pct", 0.0)
+            
+            promoter = promoter if not pd.isna(promoter) else 0.0
+            pledge = pledge if not pd.isna(pledge) else 0.0
+            
+            if promoter < MIN_PROMOTER_HOLDING:
+                continue
+                
+            if pledge > MAX_PROMOTER_PLEDGE:
                 continue
                 
             # WE FOUND ONE!
