@@ -1,0 +1,46 @@
+name: FinBERT AI Deep Dive
+
+on:
+  workflow_dispatch:
+    inputs:
+      ticker:
+        description: 'NSE Ticker (e.g., ZENTEC.NS)'
+        required: true
+        type: string
+      doc_type:
+        description: 'Document Type to Analyze'
+        required: true
+        type: choice
+        options:
+          - transcript
+          - presentation
+          - annual_report
+          - press_release
+        default: 'transcript'
+
+jobs:
+  ai-analysis:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip' # Caches the massive PyTorch library for faster future runs
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run FinBERT AI Analysis
+        # Force terminal colors so the output looks beautiful in GitHub logs
+        env:
+          FORCE_COLOR: 1 
+        run: |
+          echo "Scanning ${{ github.event.inputs.ticker }} - ${{ github.event.inputs.doc_type }}"
+          python finbert_analyzer.py "${{ github.event.inputs.ticker }}" --type "${{ github.event.inputs.doc_type }}"
