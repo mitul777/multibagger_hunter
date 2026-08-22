@@ -7,4 +7,5 @@ env/
 output/
 *.log
 *.xlsx
+*.sqlite
 .DS_Store

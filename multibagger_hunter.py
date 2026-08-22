@@ -25,6 +25,11 @@ from metrics_calculator import MetricsCalculator
 from trajectory_analyzer import TrajectoryAnalyzer
 from qualitative_checker import QualitativeChecker
 
+import requests_cache
+# Install a global transparent cache. 
+# ANY requests.get() made by yfinance, bs4, or our code will be cached in this SQLite DB for 24 hours.
+requests_cache.install_cache('market_data_cache', expire_after=86400)
+
 console = Console()
 
 # Configuration Thresholds
