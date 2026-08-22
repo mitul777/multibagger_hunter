@@ -44,7 +44,7 @@ def analyze_document_with_finbert(ticker: str, doc_type: str = "transcript"):
         
     if not pdf_bytes:
         console.print(f"[yellow]No {doc_label} found for {ticker} in recent filings.[/yellow]")
-        return
+        return None
         
     with console.status("[bold green]Extracting text...[/bold green]"):
         text = analyzer.extract_text(pdf_bytes)
@@ -52,7 +52,7 @@ def analyze_document_with_finbert(ticker: str, doc_type: str = "transcript"):
         
     if not sentences:
         console.print("[red]Could not extract sentences from the PDF.[/red]")
-        return
+        return None
         
     if doc_type == "annual_report":
         console.print("[dim]Annual Report detected. Scanning the first ~20,000 words (Chairman's Speech & MD&A) to bypass statutory tables.[/dim]")
@@ -115,6 +115,9 @@ def analyze_document_with_finbert(ticker: str, doc_type: str = "transcript"):
     console.print(f"\n[bold]Net Sentiment Score:[/bold] [bold {color}]{net_sentiment:+.1f}%[/bold {color}]")
     console.print(f"[dim]Breakdown: {len(positive)} Positive | {len(negative)} Negative | {neutral} Neutral[/dim]\n")
 
+    top_pos_quotes = [sentence for score, sentence in positive[:5]]
+    top_neg_quotes = [sentence for score, sentence in negative[:5]]
+
     # Top Positive Quotes
     if positive:
         pos_table = Table(title="[bold green]🟢 Top Positive Statements[/bold green]", box=box.SIMPLE, show_lines=True)
@@ -132,6 +135,12 @@ def analyze_document_with_finbert(ticker: str, doc_type: str = "transcript"):
         for score, sentence in negative[:5]:  # Show top 5
             neg_table.add_row(f"{score*100:.1f}%", f'"{sentence}"')
         console.print(neg_table)
+        
+    return {
+        "net_sentiment": round(net_sentiment, 1),
+        "positive_top": top_pos_quotes,
+        "negative_top": top_neg_quotes
+    }
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FinBERT Financial Document Analyzer")

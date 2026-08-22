@@ -35,6 +35,14 @@ jobs:
           # We run the hunter. It will scan 2000+ stocks and save to output/
           python multibagger_hunter.py
 
+      - name: Run Auto-AI Deep Dive on Candidates
+        # Force terminal colors so the output looks beautiful in GitHub logs
+        env:
+          FORCE_COLOR: 1 
+        run: |
+          # Automatically runs FinBERT on the 10-20 surviving candidates
+          python ai_enricher.py
+
       - name: Upload Multibagger Candidates as Artifact
         uses: actions/upload-artifact@v4
         with:
