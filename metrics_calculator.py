@@ -384,10 +384,10 @@ class MetricsCalculator:
     @staticmethod
     def _coeff_var(series: pd.Series) -> float:
         """Coefficient of Variation = std / mean. Lower = more consistent."""
-        s = series.dropna()
+        s = series.replace([np.inf, -np.inf], np.nan).dropna()
         if len(s) < 2 or s.mean() == 0:
             return np.nan
-        return abs(s.std() / s.mean())
+        return float(abs(s.std() / s.mean()))
 
     @staticmethod
     def _trend(series: pd.Series) -> float:
@@ -395,7 +395,7 @@ class MetricsCalculator:
         Linear trend slope (units per year). Positive = improving.
         Uses simple OLS: slope = cov(x,y)/var(x).
         """
-        s = series.dropna()
+        s = series.replace([np.inf, -np.inf], np.nan).dropna()
         if len(s) < 2:
             return np.nan
         x = np.arange(len(s), dtype=float)
