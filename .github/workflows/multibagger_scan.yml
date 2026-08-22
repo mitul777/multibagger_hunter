@@ -1,0 +1,43 @@
+name: Multibagger Weekly Scan
+
+on:
+  schedule:
+    # Runs at 02:00 UTC every Saturday (Saturday morning)
+    - cron: '0 2 * * 6'
+  
+  # This enables a "Run workflow" button in the GitHub UI
+  # so you can trigger it manually anytime you want!
+  workflow_dispatch: 
+
+jobs:
+  run-screener:
+    runs-on: ubuntu-latest
+    # GitHub limits free runs to 6 hours, our script takes ~1 hour.
+    timeout-minutes: 120 
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip' # Caches dependencies so future runs are faster
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Multibagger Hunter
+        run: |
+          # We run the hunter. It will scan 2000+ stocks and save to output/
+          python multibagger_hunter.py
+
+      - name: Upload Multibagger Candidates as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: multibagger-candidates-report
+          path: output/multibagger_candidates.xlsx
+          retention-days: 7 # Keeps the file for a week in GitHub UI
