@@ -67,9 +67,10 @@ def enrich_candidates():
     df['AI_Top_Positive_Quotes'] = pos_quotes
 
     # Sort the final file so the absolute best stocks are at the top
-    # Priority 1: High Trajectory Score
-    # Priority 2: High AI Sentiment
-    df = df.sort_values(by=['trajectory_score', 'AI_Net_Sentiment_%'], ascending=[False, False])
+    # Priority 1: PEG Ratio (Cheapest growth first)
+    # Priority 2: AI Sentiment
+    # Note: PEG might have NaNs if growth was negative, so we put NaNs last
+    df = df.sort_values(by=['PEG_Ratio', 'AI_Net_Sentiment_%'], ascending=[True, False], na_position='last')
     
     # Save it back
     df.to_excel(path, index=False)

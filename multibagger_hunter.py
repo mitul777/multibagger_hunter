@@ -150,17 +150,36 @@ def hunt_multibaggers():
             if pledge > MAX_PROMOTER_PLEDGE:
                 continue
                 
+            pe = qual_data.get("sh_screener_pe", np.nan)
+            pe = pe if not pd.isna(pe) else np.nan
+            
+            # Reject if hopelessly overvalued (P/E > 45)
+            if not pd.isna(pe) and pe > 45.0:
+                continue
+                
+            # Calculate PEG Ratio (PE / Net Income Growth)
+            ni_cagr = scored.get("ni_cagr_3y", np.nan)
+            peg = np.nan
+            if not pd.isna(pe) and not pd.isna(ni_cagr) and ni_cagr > 0:
+                peg = pe / ni_cagr
+                
+            # Reject if PEG is crazy high (> 3.0)
+            if not pd.isna(peg) and peg > 3.0:
+                continue
+
             # WE FOUND ONE!
             scored.update(qual_data)
             scored["market_cap_cr"] = mcap
             scored["total_institutional"] = total_inst
+            scored["PE_Ratio"] = pe
+            scored["PEG_Ratio"] = peg
             
             candidates.append(scored)
             
             # Print dynamically as we find them
             console.print(f"[bold green]🔥 CANDIDATE FOUND: {ticker}[/bold green] | "
-                          f"MCap: ₹{mcap:,.0f}Cr | Traj Score: {t_score} | "
-                          f"Inst Hold: {total_inst:.1f}%")
+                          f"MCap: ₹{mcap:,.0f}Cr | Traj: {t_score} | "
+                          f"PE: {pe:.1f} | PEG: {peg:.2f}")
             
         except Exception as e:
             # Silently skip errors on weird tickers to keep the loop moving
@@ -171,6 +190,7 @@ def hunt_multibaggers():
         df = pd.DataFrame(candidates)
         cols_to_export = [
             "ticker", "name", "market_cap_cr", "trajectory_score", 
+            "PE_Ratio", "PEG_Ratio",
             "total_institutional", "sh_promoter_holding_pct", "sh_pledge_pct",
             "roce_avg", "rev_cagr", "trajectory_signals"
         ]
@@ -182,7 +202,9 @@ def hunt_multibaggers():
             )
             
         existing_cols = [c for c in cols_to_export if c in df.columns]
-        df_export = df[existing_cols].sort_values("trajectory_score", ascending=False)
+        
+        # We rank the pre-AI candidates purely by how cheap their growth is (PEG Ratio)
+        df_export = df[existing_cols].sort_values("PEG_Ratio", ascending=True)
         
         os.makedirs("output", exist_ok=True)
         out_path = "output/multibagger_candidates.xlsx"
