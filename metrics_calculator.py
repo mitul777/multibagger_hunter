@@ -118,7 +118,7 @@ class MetricsCalculator:
         def margin_series(numerator, denominator):
             num = F.latest_n(numerator, 5)
             den = F.latest_n(denominator, 5)
-            return (num / den.reindex(num.index) * 100).dropna()
+            return (num / den.reindex(num.index) * 100).replace([np.inf, -np.inf], np.nan).dropna()
 
         gm_series  = margin_series(gross_profit, revenue)
         om_series  = margin_series(ebit, revenue)
@@ -167,7 +167,7 @@ class MetricsCalculator:
             except Exception:
                 pass
 
-        roce_s = pd.Series(roce_series).dropna()
+        roce_s = pd.Series(roce_series).replace([np.inf, -np.inf], np.nan).dropna()
         out["roce_latest"]          = roce_s.iloc[-1] if len(roce_s) else np.nan
         out["roce_avg"]             = roce_s.mean()   if len(roce_s) else np.nan
         out["roce_cv"]              = self._coeff_var(roce_s)
@@ -182,7 +182,7 @@ class MetricsCalculator:
                 roe_vals.append(F.safe_div(ni, te) * 100)
             except Exception:
                 pass
-        roe_s = pd.Series(roe_vals).dropna()
+        roe_s = pd.Series(roe_vals).replace([np.inf, -np.inf], np.nan).dropna()
         out["roe_latest"]           = roe_s.iloc[-1] if len(roe_s) else np.nan
         out["roe_avg"]              = roe_s.mean()   if len(roe_s) else np.nan
 
