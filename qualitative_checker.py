@@ -102,6 +102,11 @@ class ScreenerScraper:
     def _parse(self, html: str, symbol: str) -> dict:
         soup = BeautifulSoup(html, "html.parser")
         result = {"screener_url": f"https://www.screener.in/company/{symbol}/"}
+        
+        # ---- Extract BSE Scripcode Dynamically ----
+        match = re.search(r"bseindia\.com/stock-share-price/[^/]+/[^/]+/(\d{6})", html)
+        if match:
+            result["bse_scripcode"] = match.group(1)
 
         # ---- Shareholding Pattern table -----
         sh = self._parse_shareholding(soup)
@@ -285,9 +290,23 @@ class BSEFilingScanner:
         self.session.headers.update(BSE_HEADERS)
 
     def get_scripcode(self, ticker: str) -> Optional[str]:
-        """Map NSE ticker to BSE scripcode."""
+        """Map NSE ticker to BSE scripcode dynamically."""
         symbol = ticker.replace(".NS", "").replace(".BO", "")
-        return self.NSE_TO_BSE.get(symbol)
+        
+        if symbol in self.NSE_TO_BSE:
+            return self.NSE_TO_BSE[symbol]
+            
+        # Fallback: Scrape it dynamically from Screener.in
+        try:
+            scraper = ScreenerScraper()
+            data = scraper.fetch(ticker)
+            if "bse_scripcode" in data:
+                self.NSE_TO_BSE[symbol] = data["bse_scripcode"]
+                return data["bse_scripcode"]
+        except Exception:
+            pass
+            
+        return None
 
     def fetch_announcements(self, scripcode: str, months: int = 12) -> list[dict]:
         """Fetch corporate announcements from BSE for the last N months."""
