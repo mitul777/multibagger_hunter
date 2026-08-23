@@ -9,6 +9,8 @@
 
 import os
 import time
+import glob
+import argparse
 import pandas as pd
 import numpy as np
 from rich.console import Console
@@ -26,14 +28,16 @@ from multibagger_hunter import fetch_nse_master_list, get_market_cap_cr
 
 console = Console()
 
-def run_factor_model():
-    console.print("[bold cyan]📊 Running Cross-Sectional Factor Model (Z-Scores)[/bold cyan]")
+def gather_data(start_idx: int = 0, end_idx: int = None):
+    console.print(f"[bold cyan]📥 Gathering Market Data (Chunk {start_idx} to {end_idx})[/bold cyan]")
     
     all_tickers = fetch_nse_master_list()
     if not all_tickers: return
 
-    # For testing, you can uncomment this to run fast
-    # all_tickers = all_tickers[:100]
+    if end_idx is None:
+        end_idx = len(all_tickers)
+        
+    chunk_tickers = all_tickers[start_idx:end_idx]
 
     fetcher = DataFetcher()
     calc = MetricsCalculator()
@@ -42,7 +46,7 @@ def run_factor_model():
     
     raw_data = []
     
-    for ticker in track(all_tickers, description="Gathering Unfiltered Market Data..."):
+    for ticker in track(chunk_tickers, description="Gathering Unfiltered Market Data..."):
         try:
             mcap = get_market_cap_cr(ticker)
             if mcap == 0 or mcap > 7500: # Only hard rule: Must be a smallcap
@@ -87,9 +91,27 @@ def run_factor_model():
             pass
 
     df = pd.DataFrame(raw_data)
+    if not df.empty:
+        os.makedirs("output", exist_ok=True)
+        csv_path = f"output/raw_data_{start_idx}_{end_idx}.csv"
+        df.to_csv(csv_path, index=False)
+        console.print(f"✅ Chunk complete! Saved {len(df)} smallcaps to {csv_path}")
+
+def score_factors():
+    console.print("[bold cyan]📊 Running Cross-Sectional Factor Model (Z-Scores)[/bold cyan]")
+    
+    # 1. Merge all chunked data
+    csv_files = glob.glob("output/raw_data_*.csv")
+    if not csv_files:
+        console.print("[red]No raw data CSVs found in output/. Run --gather first.[/red]")
+        return
+        
+    df_list = [pd.read_csv(f) for f in csv_files]
+    df = pd.concat(df_list, ignore_index=True)
+    
     if df.empty: return
     
-    # 1. Clean Data (Drop missing critical metrics, fill others with median)
+    # 2. Clean Data (Drop missing critical metrics, fill others with median)
     df = df.dropna(subset=['trajectory_score', 'PE_Ratio'])
     df['PEG_Ratio'] = df['PEG_Ratio'].fillna(df['PEG_Ratio'].median())
     df['roce_avg'] = df['roce_avg'].fillna(df['roce_avg'].median())
@@ -102,7 +124,7 @@ def run_factor_model():
     df = df.replace([np.inf, -np.inf], np.nan).dropna(subset=['trajectory_score'])
     df = df.fillna(df.median(numeric_only=True))
     
-    # 2. Compute Z-Scores (StandardScaler calculates (X - Mean) / StdDev)
+    # 3. Compute Z-Scores (StandardScaler calculates (X - Mean) / StdDev)
     scaler = StandardScaler()
     
     # Positive Factors (Higher is Better)
@@ -119,7 +141,7 @@ def run_factor_model():
     df['Z_InstHold']   = scaler.fit_transform(df[['total_institutional']]) * -1
     df['Z_Debt']       = scaler.fit_transform(df[['debt_to_equity']]) * -1
     
-    # 3. Calculate Final Composite Score
+    # 4. Calculate Final Composite Score
     # We give 3x weight to Trajectory, 3x to Valuation, and weigh everything else
     df['Composite_Factor_Score'] = (
         (df['Z_Trajectory'] * 3) + 
@@ -134,11 +156,11 @@ def run_factor_model():
         df['Z_InstHold']
     )
     
-    # 4. Sort and Export
+    # 5. Sort and Export
     df = df.sort_values(by='Composite_Factor_Score', ascending=False)
     
-    os.makedirs("output", exist_ok=True)
-    df.to_excel("output/factor_model_candidates.xlsx", index=False)
+    out_path = "output/factor_model_candidates.xlsx"
+    df.to_excel(out_path, index=False)
     
     console.print("\n[bold green]✅ Factor Model Complete![/bold green]")
     console.print(f"Scored {len(df)} smallcaps purely on cross-sectional Z-Scores.")
@@ -146,4 +168,18 @@ def run_factor_model():
     console.print(df[['ticker', 'trajectory_score', 'PEG_Ratio', 'Composite_Factor_Score']].head(5).to_string())
 
 if __name__ == "__main__":
-    run_factor_model()
+    parser = argparse.ArgumentParser(description="Cross-Sectional Factor Model pipeline")
+    parser.add_argument("--gather", action="store_true", help="Fetch market data for a chunk of tickers")
+    parser.add_argument("--score", action="store_true", help="Combine raw chunks and run factor scoring")
+    parser.add_argument("--start", type=int, default=0, help="Start index for gathering")
+    parser.add_argument("--end", type=int, default=None, help="End index for gathering")
+    args = parser.parse_args()
+
+    if args.gather:
+        gather_data(args.start, args.end)
+    elif args.score:
+        score_factors()
+    else:
+        # Default behavior: run everything (for backward compatibility)
+        gather_data()
+        score_factors()

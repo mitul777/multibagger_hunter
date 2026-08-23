@@ -7,6 +7,8 @@
 # =============================================================================
 
 import os
+import glob
+import argparse
 import pandas as pd
 import numpy as np
 from rich.console import Console
@@ -14,64 +16,18 @@ from rich.progress import track
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 
-import requests_cache
-requests_cache.install_cache('market_data_cache', expire_after=86400)
-
-from data_fetcher import DataFetcher
-from metrics_calculator import MetricsCalculator
-from trajectory_analyzer import TrajectoryAnalyzer
-from qualitative_checker import QualitativeChecker
-from multibagger_hunter import fetch_nse_master_list, get_market_cap_cr
-
 console = Console()
 
-def run_ml_clustering():
+def score_ml():
     console.print("[bold magenta]🤖 Running Unsupervised ML (K-Means Clustering)[/bold magenta]")
     
-    all_tickers = fetch_nse_master_list()
-    if not all_tickers: return
-
-    fetcher = DataFetcher()
-    calc = MetricsCalculator()
-    traj = TrajectoryAnalyzer()
-    qual = QualitativeChecker()
-    
-    raw_data = []
-    
-    for ticker in track(all_tickers, description="Gathering Unfiltered Market Data..."):
-        try:
-            mcap = get_market_cap_cr(ticker)
-            if mcap == 0 or mcap > 7500:
-                continue
-                
-            data = fetcher.fetch(ticker)
-            if not data: continue
-                
-            metrics = calc.compute(data)
-            scored = traj.analyze(data, metrics)
-            t_score = scored.get("trajectory_score", 0)
-            
-            qual_data = qual.check(ticker)
-            pe = qual_data.get("sh_screener_pe", np.nan)
-            ni_cagr = scored.get("ni_cagr_3y", np.nan)
-            peg = (pe / ni_cagr) if (not pd.isna(pe) and not pd.isna(ni_cagr) and ni_cagr > 0) else np.nan
-            
-            row = {
-                "ticker": ticker,
-                "trajectory_score": t_score,
-                "PEG_Ratio": peg,
-                "roce_avg": scored.get("roce_avg", np.nan),
-                "promoter_holding": qual_data.get("sh_promoter_holding_pct", 0.0),
-                "earnings_quality": metrics.get("earnings_quality", np.nan),
-                "debt_to_equity": metrics.get("debt_to_equity", np.nan),
-                "ev_to_ebitda": metrics.get("ev_to_ebitda", np.nan),
-                "price_momentum": metrics.get("price_momentum", np.nan)
-            }
-            raw_data.append(row)
-        except Exception:
-            pass
-
-    df = pd.DataFrame(raw_data)
+    csv_files = glob.glob("output/raw_data_*.csv")
+    if not csv_files:
+        console.print("[red]No raw data CSVs found. Run hunter_factor_model.py --gather first.[/red]")
+        return
+        
+    df_list = [pd.read_csv(f) for f in csv_files]
+    df = pd.concat(df_list, ignore_index=True)
     if df.empty: return
     
     # 1. Clean Data for ML Model
@@ -100,12 +56,11 @@ def run_ml_clustering():
     cluster_stats = df.groupby('Cluster')[features].mean()
     
     # We want max Trajectory, max ROCE, max Promoter, min PEG.
-    # Let's create a simple score just to identify which cluster is best
     cluster_scores = (
         cluster_stats['trajectory_score'] + 
         cluster_stats['roce_avg'] + 
         (cluster_stats['promoter_holding'] / 2) - 
-        (cluster_stats['PEG_Ratio'] * 20)  # Heavily penalize high average PEG
+        (cluster_stats['PEG_Ratio'] * 20)
     )
     
     golden_cluster_id = cluster_scores.idxmax()
@@ -116,7 +71,6 @@ def run_ml_clustering():
     # 5. Filter and Export only stocks in the Golden Cluster
     golden_stocks = df[df['Cluster'] == golden_cluster_id].copy()
     
-    # Sort them by proximity to cluster center (or just by Trajectory within the cluster)
     golden_stocks = golden_stocks.sort_values(by='trajectory_score', ascending=False)
     
     os.makedirs("output", exist_ok=True)
@@ -127,4 +81,8 @@ def run_ml_clustering():
     console.print(golden_stocks[['ticker', 'trajectory_score', 'PEG_Ratio', 'roce_avg']].head(5).to_string())
 
 if __name__ == "__main__":
-    run_ml_clustering()
+    parser = argparse.ArgumentParser(description="ML Clustering pipeline")
+    parser.add_argument("--score", action="store_true", help="Run ML clustering on pre-gathered CSVs")
+    args = parser.parse_args()
+    
+    score_ml()
